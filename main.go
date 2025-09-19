@@ -10,7 +10,7 @@ import (
 func main() {
 	lb := RunnableChain{}.
 		Replicas(3).
-		Retry(1, 2*time.Second).
+		Retry(3, 1*time.Second).
 		Recover().
 		X(func(next Runnable) Runnable {
 			return F(func(ctx context.Context) error {
@@ -24,7 +24,7 @@ func main() {
 
 	f := F(Kek)
 
-	l = LaunchingWithAwesomeAnimation(l, f)
+	l = Launching(l, f)
 
 	if err := l.Run(context.Background()); err != nil {
 		log.Println(err)

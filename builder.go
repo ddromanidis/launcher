@@ -93,6 +93,36 @@ func (rc RunnableChain) Recover() RunnableChain {
 	return rc
 }
 
+func (rc RunnableChain) OnCancel(cleanupFunc func()) RunnableChain {
+	f := func(next Runnable) Runnable {
+		return F(func(ctx context.Context) error {
+			err := next.Run(ctx)
+			if err != nil && errors.Is(err, context.Canceled) {
+				// appName := GetAppName(next)
+				// fmt.Printf("Running OnCancel for %s due to context cancellation\n", appName)
+				cleanupFunc()
+			}
+			return err
+		})
+	}
+	rc.fs = append(rc.fs, f)
+	return rc
+}
+
+func (rc RunnableChain) OnError(errFunc func(error)) RunnableChain {
+	f := func(next Runnable) Runnable {
+		return F(func(ctx context.Context) error {
+			err := next.Run(ctx)
+			if err != nil {
+				errFunc(err)
+			}
+			return err
+		})
+	}
+	rc.fs = append(rc.fs, f)
+	return rc
+}
+
 // X method allows you to extend LaunchableBuilder with methods of your own
 func (rc RunnableChain) X(f func(Runnable) Runnable) RunnableChain {
 	rc.fs = append(rc.fs, f)
