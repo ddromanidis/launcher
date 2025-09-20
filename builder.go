@@ -1,34 +1,41 @@
-package main
+package launcher
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 )
 
-type RunnableChain struct {
+type LauncherChain struct {
 	fs []func(Runnable) Runnable
+	l  *slog.Logger
 }
 
-func (rc RunnableChain) Retry(r uint, delay time.Duration) RunnableChain {
+func NewLauncherChain() *LauncherChain {
+	return &LauncherChain{}
+}
+
+func (rc *LauncherChain) Retry(r uint, delay time.Duration) *LauncherChain {
 	f := func(next Runnable) Runnable {
 		return F(func(ctx context.Context) error {
-			if r == 0 {
-				r = r - 1 // retry many many times - just a stupid hack for nights coding, need something better
-			}
-
 			var lastErr error
 
-			for a := 0; a < int(r); a++ {
+			// r == 0 means loop will be infinite
+			for a := 0; r == 0 || a < int(r); a++ {
 				err := next.Run(ctx)
 				if err == nil {
 					return nil // Success
 				}
 
-				if lastErr == nil {
+				if rc.l != nil {
+					rc.l.Error("retrying with error", "attempt", a, "error", err)
+				}
+
+				if lastErr == nil || r == 0 {
 					lastErr = err
 				} else {
 					lastErr = errors.Join(lastErr, err)
@@ -54,7 +61,7 @@ func (rc RunnableChain) Retry(r uint, delay time.Duration) RunnableChain {
 	return rc
 }
 
-func (rc RunnableChain) Replicas(count uint) RunnableChain {
+func (rc *LauncherChain) Replicas(count uint) *LauncherChain {
 	f := func(next Runnable) Runnable {
 		return F(func(ctx context.Context) error {
 			if count == 0 {
@@ -64,9 +71,16 @@ func (rc RunnableChain) Replicas(count uint) RunnableChain {
 			g, gCtx := errgroup.WithContext(ctx)
 
 			for i := uint(0); i < count; i++ {
+				i := i
 				g.Go(func() error {
-					// return next.Launch(gCtx)
-					return fmt.Errorf("replica %d returned error: %w", i+1, next.Run(gCtx))
+					if err := next.Run(ctx); err != nil {
+						return fmt.Errorf("replica %d returned error: %w", i+1, next.Run(gCtx))
+					}
+
+					if rc.l != nil {
+						rc.l.Info("replica finished without error", "replica_n", i+1)
+					}
+					return nil
 				})
 			}
 
@@ -77,7 +91,7 @@ func (rc RunnableChain) Replicas(count uint) RunnableChain {
 	return rc
 }
 
-func (rc RunnableChain) Recover() RunnableChain {
+func (rc *LauncherChain) Recover() *LauncherChain {
 	f := func(next Runnable) Runnable {
 		return F(func(ctx context.Context) (err error) {
 			defer func() {
@@ -93,7 +107,7 @@ func (rc RunnableChain) Recover() RunnableChain {
 	return rc
 }
 
-func (rc RunnableChain) OnCancel(cleanupFunc func()) RunnableChain {
+func (rc *LauncherChain) OnCancel(cleanupFunc func()) *LauncherChain {
 	f := func(next Runnable) Runnable {
 		return F(func(ctx context.Context) error {
 			err := next.Run(ctx)
@@ -109,7 +123,7 @@ func (rc RunnableChain) OnCancel(cleanupFunc func()) RunnableChain {
 	return rc
 }
 
-func (rc RunnableChain) OnError(errFunc func(error)) RunnableChain {
+func (rc *LauncherChain) OnError(errFunc func(error)) *LauncherChain {
 	f := func(next Runnable) Runnable {
 		return F(func(ctx context.Context) error {
 			err := next.Run(ctx)
@@ -124,21 +138,19 @@ func (rc RunnableChain) OnError(errFunc func(error)) RunnableChain {
 }
 
 // X method allows you to extend LaunchableBuilder with methods of your own
-func (rc RunnableChain) X(f func(Runnable) Runnable) RunnableChain {
+func (rc *LauncherChain) X(f func(Runnable) Runnable) *LauncherChain {
 	rc.fs = append(rc.fs, f)
 	return rc
 }
 
-func (rc RunnableChain) Apply(l Runnable) Runnable {
-	for i := len(rc.fs) - 1; i >= 0; i-- {
-		l = rc.fs[i](l)
-	}
-	return l
+func (rc *LauncherChain) WithLogger(l *slog.Logger) *LauncherChain {
+	rc.l = l
+	return rc
 }
 
-func (rc RunnableChain) ApplyFrontToBack(l Runnable) Runnable {
-	for _, f := range rc.fs {
-		l = f(l)
+func (rc *LauncherChain) Apply(l Runnable) Runnable {
+	for i := len(rc.fs) - 1; i >= 0; i-- {
+		l = rc.fs[i](l)
 	}
 	return l
 }
