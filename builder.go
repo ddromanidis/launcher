@@ -168,7 +168,11 @@ func (rc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
 //
 
 // X method allows you to extend LaunchableBuilder with methods of your own
-func (rc LauncherChain) X(f func(LauncherChain) func(Runnable) Runnable) LauncherChain {
+func (rc LauncherChain) X(fn func(Runnable) Runnable) LauncherChain {
+	f := func(LauncherChain) func(Runnable) Runnable {
+		return fn
+	}
+
 	fs := make([]func(LauncherChain) func(Runnable) Runnable, len(rc.fs))
 	copy(fs, rc.fs)
 
