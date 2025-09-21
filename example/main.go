@@ -19,12 +19,12 @@ func main() {
 	lb := launcher.NewLauncherChain().
 		Replicas(3).
 		Retry(0, 1*time.Second).
-		Recover().
-		WithLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+		Recover()
 
-	l := lb.Apply(ll{})
+	l := lb.WithLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("app", "ll")).Apply(ll{})
 
-	f := launcher.F(Kek)
+	f := lb.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, nil)).With("app", "kek")).
+		Apply(launcher.F(Kek))
 
 	l = launcher.Launching(l, f)
 
