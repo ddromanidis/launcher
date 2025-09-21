@@ -21,7 +21,7 @@ func NewLauncherChain() LauncherChain {
 	return LauncherChain{}
 }
 
-func (rc LauncherChain) Retry(r uint, delay time.Duration) LauncherChain {
+func (lc LauncherChain) Retry(r uint, delay time.Duration) LauncherChain {
 	f := func(chain LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) error {
@@ -62,16 +62,16 @@ func (rc LauncherChain) Retry(r uint, delay time.Duration) LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
-	copy(fs, rc.fs)
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(lc.fs))
+	copy(fs, lc.fs)
 
 	return LauncherChain{
 		fs: append(fs, f),
-		l:  rc.l,
+		l:  lc.l,
 	}
 }
 
-func (rc LauncherChain) Replicas(count uint) LauncherChain {
+func (lc LauncherChain) Replicas(count uint) LauncherChain {
 	f := func(chain LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) error {
@@ -88,8 +88,8 @@ func (rc LauncherChain) Replicas(count uint) LauncherChain {
 							return fmt.Errorf("replica %d returned error: %w", i+1, next.Run(gCtx))
 						}
 
-						if rc.l != nil {
-							rc.l.Info("replica finished without error", "replica_n", i+1)
+						if lc.l != nil {
+							lc.l.Info("replica finished without error", "replica_n", i+1)
 						}
 						return nil
 					})
@@ -100,16 +100,16 @@ func (rc LauncherChain) Replicas(count uint) LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
-	copy(fs, rc.fs)
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(lc.fs))
+	copy(fs, lc.fs)
 
 	return LauncherChain{
 		fs: append(fs, f),
-		l:  rc.l,
+		l:  lc.l,
 	}
 }
 
-func (rc LauncherChain) Recover() LauncherChain {
+func (lc LauncherChain) Recover() LauncherChain {
 	f := func(chain LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) (err error) {
@@ -123,16 +123,16 @@ func (rc LauncherChain) Recover() LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
-	copy(fs, rc.fs)
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(lc.fs))
+	copy(fs, lc.fs)
 
 	return LauncherChain{
 		fs: append(fs, f),
-		l:  rc.l,
+		l:  lc.l,
 	}
 }
 
-func (rc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
+func (lc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
 	f := func(LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) error {
@@ -145,16 +145,16 @@ func (rc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
-	copy(fs, rc.fs)
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(lc.fs))
+	copy(fs, lc.fs)
 
 	return LauncherChain{
 		fs: append(fs, f),
-		l:  rc.l,
+		l:  lc.l,
 	}
 }
 
-// func (rc LauncherChain) OnError(errFunc func(error)) LauncherChain {
+// func (lc LauncherChain) OnError(errFunc func(error)) LauncherChain {
 // 	f := func(next Runnable) Runnable {
 // 		return F(func(ctx context.Context) error {
 // 			err := next.Run(ctx)
@@ -164,34 +164,34 @@ func (rc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
 // 			return err
 // 		})
 // 	}
-// 	rc.fs = append(rc.fs, f)
-// 	return rc
+// 	lc.fs = append(lc.fs, f)
+// 	return lc
 // }
 //
 
 // X method allows you to extend LaunchableBuilder with methods of your own
-func (rc LauncherChain) X(fn RunnableMiddleware) LauncherChain {
+func (lc LauncherChain) X(fn RunnableMiddleware) LauncherChain {
 	f := func(LauncherChain) RunnableMiddleware {
 		return fn
 	}
 
-	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
-	copy(fs, rc.fs)
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(lc.fs))
+	copy(fs, lc.fs)
 
 	return LauncherChain{
 		fs: append(fs, f),
-		l:  rc.l,
+		l:  lc.l,
 	}
 }
 
-func (rc LauncherChain) WithLogger(l *slog.Logger) LauncherChain {
-	rc.l = l
-	return rc
+func (lc LauncherChain) WithLogger(l *slog.Logger) LauncherChain {
+	lc.l = l
+	return lc
 }
 
-func (rc LauncherChain) Apply(l Runnable) Runnable {
-	for i := len(rc.fs) - 1; i >= 0; i-- {
-		l = rc.fs[i](rc)(l)
+func (lc LauncherChain) Apply(l Runnable) Runnable {
+	for i := len(lc.fs) - 1; i >= 0; i-- {
+		l = lc.fs[i](lc)(l)
 	}
 	return l
 }

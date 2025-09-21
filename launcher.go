@@ -10,19 +10,19 @@ import (
 var _ Runnable = (*Launcher)(nil)
 
 type Launcher struct {
-	ls []Runnable
+	rs []Runnable
 }
 
 func NewLauncher(ls ...Runnable) Launcher {
-	return Launcher{ls: ls}
+	return Launcher{rs: ls}
 }
 
 func (l Launcher) Run(ctx context.Context) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
-	for _, lnch := range l.ls {
+	for _, r := range l.rs {
 		g.Go(func() error {
-			return lnch.Run(gCtx)
+			return r.Run(gCtx)
 		})
 	}
 
