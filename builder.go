@@ -10,8 +10,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type RunnableMiddleware func(Runnable) Runnable
+
 type LauncherChain struct {
-	fs []func(LauncherChain) func(Runnable) Runnable
+	fs []func(LauncherChain) RunnableMiddleware
 	l  *slog.Logger
 }
 
@@ -20,7 +22,7 @@ func NewLauncherChain() LauncherChain {
 }
 
 func (rc LauncherChain) Retry(r uint, delay time.Duration) LauncherChain {
-	f := func(chain LauncherChain) func(Runnable) Runnable {
+	f := func(chain LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) error {
 				var lastErr error
@@ -60,7 +62,7 @@ func (rc LauncherChain) Retry(r uint, delay time.Duration) LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) func(Runnable) Runnable, len(rc.fs))
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
 	copy(fs, rc.fs)
 
 	return LauncherChain{
@@ -70,7 +72,7 @@ func (rc LauncherChain) Retry(r uint, delay time.Duration) LauncherChain {
 }
 
 func (rc LauncherChain) Replicas(count uint) LauncherChain {
-	f := func(chain LauncherChain) func(Runnable) Runnable {
+	f := func(chain LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) error {
 				if count == 0 {
@@ -98,7 +100,7 @@ func (rc LauncherChain) Replicas(count uint) LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) func(Runnable) Runnable, len(rc.fs))
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
 	copy(fs, rc.fs)
 
 	return LauncherChain{
@@ -108,7 +110,7 @@ func (rc LauncherChain) Replicas(count uint) LauncherChain {
 }
 
 func (rc LauncherChain) Recover() LauncherChain {
-	f := func(chain LauncherChain) func(Runnable) Runnable {
+	f := func(chain LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) (err error) {
 				defer func() {
@@ -121,7 +123,7 @@ func (rc LauncherChain) Recover() LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) func(Runnable) Runnable, len(rc.fs))
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
 	copy(fs, rc.fs)
 
 	return LauncherChain{
@@ -131,7 +133,7 @@ func (rc LauncherChain) Recover() LauncherChain {
 }
 
 func (rc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
-	f := func(LauncherChain) func(Runnable) Runnable {
+	f := func(LauncherChain) RunnableMiddleware {
 		return func(next Runnable) Runnable {
 			return F(func(ctx context.Context) error {
 				err := next.Run(ctx)
@@ -143,7 +145,7 @@ func (rc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
 		}
 	}
 
-	fs := make([]func(LauncherChain) func(Runnable) Runnable, len(rc.fs))
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
 	copy(fs, rc.fs)
 
 	return LauncherChain{
@@ -168,12 +170,12 @@ func (rc LauncherChain) OnCancel(cleanupFunc func()) LauncherChain {
 //
 
 // X method allows you to extend LaunchableBuilder with methods of your own
-func (rc LauncherChain) X(fn func(Runnable) Runnable) LauncherChain {
-	f := func(LauncherChain) func(Runnable) Runnable {
+func (rc LauncherChain) X(fn RunnableMiddleware) LauncherChain {
+	f := func(LauncherChain) RunnableMiddleware {
 		return fn
 	}
 
-	fs := make([]func(LauncherChain) func(Runnable) Runnable, len(rc.fs))
+	fs := make([]func(LauncherChain) RunnableMiddleware, len(rc.fs))
 	copy(fs, rc.fs)
 
 	return LauncherChain{
